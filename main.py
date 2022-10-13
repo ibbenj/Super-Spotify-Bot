@@ -24,6 +24,7 @@ async def on_ready():
 poll_id = None
 sp = None
 curSongId = None
+playlist = None
 
 
 @client.event
@@ -32,12 +33,15 @@ async def on_message(message):
     if msg.startswith('$login'):
         scope = "user-read-playback-state,user-modify-playback-state"
         global sp
-        sp = spotipy.Spotify(client_credentials_manager=SpotifyOAuth(scope=scope))
-        # Change track
-        #sp.start_playback(uris=['spotify:track:6gdLoMygLsgktydTQ71b15'])
 
-        # Change volume
-        #sp.volume(100)
+        try:
+            sp = spotipy.Spotify(client_credentials_manager=SpotifyOAuth(scope=scope))
+        except:
+            await message.channel.send("Not spotify device linked to your account has been recently active.\n"
+                                       "Please turn on any song.")
+            return
+
+        sp.volume(80)
         await message.channel.send('Login Successful!')
 
     elif msg.startswith('$test_react'):
@@ -69,13 +73,12 @@ async def on_message(message):
 
             await message.channel.send('Winner: '+str(winner)+' with '+str(max_cnt-1)+' votes.')
 
-    #TODO: These are the methods that I want to cover - after this I may be done - PR to github! - use github desktop
-    elif msg.startswith('$save'):
-        # TODO: Save the active song to your playlist (or make one as well if you don't have one for the bot)
-        return
-
     elif msg.startswith('$play'):
         # TODO: Save the active song to your playlist (or make one as well if you don't have one for the bot)
+        if not sp:
+            await message.channel.send("Please login using $login before using the bot")
+            return
+
         res = sp.devices()
 
         print("DEVICES:")
@@ -84,8 +87,36 @@ async def on_message(message):
         if res == None:
             print("ERROR: Can't find device with recently active spotify. Go onto spotify and play then pause something and it will find it")
 
+        #Handle album title
+        if len(msg) <= 6:
+            await message.channel.send("ERROR: Specify playlist name, e.g. $play My Songs")
+            return
+
+        playlists = sp.current_user_playlists()
+
+        playlist_name = msg[6:len(msg)]
+
+        global playlist
+        for pl in playlists['items']:
+            print(pl)
+            if pl['name'] == playlist_name:
+                playlist = pl
+
+        if playlist is None:
+            await message.channel.send("ERROR: Playlist "+playlist_name+" doesn't exist")
+            return
+
+        print("PLAYLIST PLAYING: "+playlist['name'])
+        print("URI PLAYING: "+str(playlist['uri']))
+
         # Change track
-        sp.start_playback(uris=['spotify:track:3ZE3wv8V3w2T2f7nOCjV0N'])
+        #try formatting it in this way: spotify:user:Ilan:playlist:3vF706eyeQ2izI4lhnTQde
+
+        sp.start_playback(context_uri=playlist['uri'])
+
+
+        #sp.start_playback(context_uri='spotify:playlist:4nQhwDDOkqPKZgO2y6J7Yn')
+        #sp.start_playback(uris=['spotify:track:3ZE3wv8V3w2T2f7nOCjV0N'])
 
         # Change volume
         sp.volume(80)
@@ -102,30 +133,18 @@ async def on_message(message):
         await cur_song.add_reaction('🔊')
         print("cur_song.id: "+str(cur_song.id))
 
-
     elif msg.startswith('$stop'):
-        # TODO: Save the active song to your playlist (or make one as well if you don't have one for the bot)
+        if not sp:
+            await message.channel.send("Please login using $login before using the bot")
+            return
+
+        sp.pause_playback()
+        sp = None;
         return
 
     elif msg.startswith('$help'):
         # TODO: Save the active song to your playlist (or make one as well if you don't have one for the bot)
         return
-
-"""print(msg)
-
-    if msg.startswith('$login'):
-        await message.channel.send(f'Logging into: {message.author}\'s account')
-        lz_uri = 'spotify:artist:36QJpDe2go2KgaRleHCDTp'  # Led Zepplin
-
-        spotify = spotipy.Spotify(client_credentials_manager=SpotifyClientCredentials())
-        results = spotify.artist_top_tracks(lz_uri)
-
-        for track in results['tracks'][:10]:
-            name = track['name']
-            audio = track['preview_url']
-            cover_art = track['album']['images'][0]['url']
-            await message.channel.send(f'track: {name} \n audio: {audio} \n cover art: {cover_art} \n') """
-
 
 @client.event
 async def on_reaction_add(reaction, user):
@@ -145,14 +164,8 @@ async def on_reaction_add(reaction, user):
         cur_song = discord.utils.get(client.cached_messages, id=reaction.message.id)
 
         for rxn in cur_song.reactions:
-            # got the below two lines from
+            # got the below line from
             # https://stackoverflow.com/questions/70458812/discord-py-bot-limit-player-to-one-reaction-for-a-poll
-            #print(str(user))
-            #for u in await rxn.users().flatten():
-            #    print("P:"+str(u))
-            #print(str(user in await rxn.users().flatten()))
-            #print(str(not user.bot))
-            #print(str(str(rxn) != str(reaction.emoji)))
             if user in await rxn.users().flatten() and not user.bot:
                 if rxn.emoji == '🔉':
                     res = sp.current_playback()
@@ -173,6 +186,18 @@ async def on_reaction_add(reaction, user):
                         sp.start_playback()
 
                 elif rxn.emoji == '⏩':
+                    sp.next_track()
+
+                    song_info = sp.current_playback()
+                    await cur_song.edit(content='Playing ' + str(song_info['item']['name']) + '\nby ' + str(
+                        song_info['item']['artists'][0]['name']))
+                    #curSongId = cur_song.id
+                    #await cur_song.add_reaction('🔉')
+                    #await cur_song.add_reaction('⏯')
+                    #await cur_song.add_reaction('⏩')
+                    #await cur_song.add_reaction('🔊')
+                    print("cur_song.id: " + str(cur_song.id))
+                    #want to update message or delete previous message
                     print("replace")
 
                 elif rxn.emoji == '🔊':
