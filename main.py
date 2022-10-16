@@ -2,7 +2,7 @@ import discord
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials, SpotifyOAuth
 from pprint import pprint
-from time import sleep
+import time
 import os
 
 client = discord.Client()
@@ -25,6 +25,14 @@ poll_id = None
 sp = None
 curSongId = None
 playlist = None
+next_songs = None
+#TODO: Make a class to put stuff in so less global variables
+
+
+async def update_display(cur_song):
+    song_info = sp.current_playback()
+    await cur_song.edit(content='Playing ' + str(song_info['item']['name']) + '\nby ' + str(
+        song_info['item']['artists'][0]['name']))
 
 
 @client.event
@@ -36,6 +44,7 @@ async def on_message(message):
 
         try:
             sp = spotipy.Spotify(client_credentials_manager=SpotifyOAuth(scope=scope))
+
         except:
             await message.channel.send("Not spotify device linked to your account has been recently active.\n"
                                        "Please turn on any song.")
@@ -44,13 +53,20 @@ async def on_message(message):
         sp.volume(80)
         await message.channel.send('Login Successful!')
 
-    elif msg.startswith('$test_react'):
+    elif msg.startswith('$vote'):
         global poll_id
-        poll = await message.channel.send('Please vote on next song: \n'
-                                   '1) 21 Guns by Green Day \n'
-                                   '2) Set Fire to the Rain by Adele \n'
-                                   '3) Thunderstruck by AC/DC \n'
-                                   '4) Roar by Katy Perry')
+        global next_songs
+        next_songs = sp.recommendations(seed_tracks=[sp.current_playback()['item']['uri']], limit='4')['tracks']
+        print(sp.current_playback()['item']['uri'])
+        for song in next_songs:
+            print(str(song) + ":")
+
+        dis_msg = "Please vote on next song:"
+        for i in range(0,4,1):
+            dis_msg = dis_msg + "\n" + str(i+1) + ") " + next_songs[i]['name']\
+                      + " by " + next_songs[i]['artists'][0]['name']
+
+        poll = await message.channel.send(dis_msg)
         await poll.add_reaction('1️⃣')
         await poll.add_reaction('2️⃣')
         await poll.add_reaction('3️⃣')
@@ -148,7 +164,7 @@ async def on_message(message):
 
 @client.event
 async def on_reaction_add(reaction, user):
-    print(str(reaction.message.id)+":VS:\n"+str(curSongId))
+    #print(str(reaction.message.id)+":VS:\n"+str(curSongId))
 
     if user.id != client.user.id and poll_id == reaction.message.id:  # TODO: test the second condition of this line - wasn't here before
         poll = discord.utils.get(client.cached_messages, id=reaction.message.id)
@@ -159,6 +175,34 @@ async def on_reaction_add(reaction, user):
             if user in await rxn.users().flatten() and not user.bot and str(rxn) != str(reaction.emoji):
                 await poll.remove_reaction(rxn.emoji, user)
                 print("not first react: " + str(rxn)+" "+str(reaction.emoji))
+                return
+
+            if rxn.count >= 2:
+                print("Next song chosen")
+                if reaction.emoji == '1️⃣':
+                    print(next_songs[0]['uri'])
+                    sp.start_playback(uris=[next_songs[0]['uri']])
+                elif reaction.emoji == '2️⃣':
+                    print(next_songs[1]['uri'])
+                    sp.start_playback(uris=[next_songs[1]['uri']])
+                elif reaction.emoji == '3️⃣':
+                    print(next_songs[2]['uri'])
+                    sp.start_playback(uris=[next_songs[2]['uri']])
+                elif reaction.emoji == '4️⃣':
+                    print(next_songs[3]['uri'])
+                    sp.start_playback(uris=[next_songs[3]['uri']])
+
+
+                """cur_song = await message.channel.send('Playing ' + str(next_songs['name']) + '\nby ' + str(
+                    next_songs['artists'][0]['name']))
+                curSongId = cur_song.id
+                await cur_song.add_reaction('🔉')
+                await cur_song.add_reaction('⏯')
+                await cur_song.add_reaction('⏩')
+                await cur_song.add_reaction('🔊')
+                print("cur_song.id: " + str(cur_song.id))"""
+
+
 
     elif user.id != client.user.id and curSongId == reaction.message.id:
         cur_song = discord.utils.get(client.cached_messages, id=reaction.message.id)
@@ -188,18 +232,6 @@ async def on_reaction_add(reaction, user):
                 elif rxn.emoji == '⏩':
                     sp.next_track()
 
-                    song_info = sp.current_playback()
-                    await cur_song.edit(content='Playing ' + str(song_info['item']['name']) + '\nby ' + str(
-                        song_info['item']['artists'][0]['name']))
-                    #curSongId = cur_song.id
-                    #await cur_song.add_reaction('🔉')
-                    #await cur_song.add_reaction('⏯')
-                    #await cur_song.add_reaction('⏩')
-                    #await cur_song.add_reaction('🔊')
-                    print("cur_song.id: " + str(cur_song.id))
-                    #want to update message or delete previous message
-                    print("replace")
-
                 elif rxn.emoji == '🔊':
                     res = sp.current_playback()
                     if res['is_playing']:
@@ -211,6 +243,7 @@ async def on_reaction_add(reaction, user):
                         else:
                             sp.volume(cur_vol + 10)
 
+                update_display(cur_song)
                 await cur_song.remove_reaction(rxn.emoji, user)
 
 
