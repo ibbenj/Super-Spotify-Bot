@@ -2,7 +2,6 @@ import discord
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials, SpotifyOAuth
 from pprint import pprint
-import time
 import os
 
 client = discord.Client()
@@ -19,6 +18,8 @@ async def on_ready():
             channel = guild.get_channel(1023706018078785556)
     global vc
     vc = await channel.connect()
+
+    await channel.send("Welcome to superSpotify bot. If you don't know what you're doing, type '$help'.")
     print('Connected!')
 
 poll_id = None
@@ -26,17 +27,18 @@ sp = None
 curSongId = None
 playlist = None
 next_songs = None
-#TODO: Make a class to put stuff in so less global variables
-
 
 async def update_display(cur_song):
     song_info = sp.current_playback()
-    await cur_song.edit(content='Playing ' + str(song_info['item']['name']) + '\nby ' + str(
-        song_info['item']['artists'][0]['name']))
+    await cur_song.edit(content='Playing ' + str(song_info['album']))
 
 
 @client.event
 async def on_message(message):
+
+    if message.author.bot:
+        return
+
     msg = message.content
     if msg.startswith('$login'):
         scope = "user-read-playback-state,user-modify-playback-state"
@@ -125,23 +127,17 @@ async def on_message(message):
         print("PLAYLIST PLAYING: "+playlist['name'])
         print("URI PLAYING: "+str(playlist['uri']))
 
-        # Change track
-        #try formatting it in this way: spotify:user:Ilan:playlist:3vF706eyeQ2izI4lhnTQde
-
         sp.start_playback(context_uri=playlist['uri'])
-
-
         #sp.start_playback(context_uri='spotify:playlist:4nQhwDDOkqPKZgO2y6J7Yn')
         #sp.start_playback(uris=['spotify:track:3ZE3wv8V3w2T2f7nOCjV0N'])
 
         # Change volume
         sp.volume(80)
 
-        song_info = sp.current_playback()
 
         global curSongId
         # TODO: Only shows one artist- have it show multiple artists
-        cur_song = await message.channel.send('Playing '+str(song_info['item']['name'])+'\nby '+str(song_info['item']['artists'][0]['name']))
+        cur_song = await message.channel.send('Music Player:')
         curSongId = cur_song.id
         await cur_song.add_reaction('🔉')
         await cur_song.add_reaction('⏯')
@@ -159,12 +155,25 @@ async def on_message(message):
         return
 
     elif msg.startswith('$help'):
-        # TODO: Save the active song to your playlist (or make one as well if you don't have one for the bot)
+        await message.channel.send("COMMANDS:")
+        await message.channel.send("$login             - Authenticate. Must do this before using any other command.")
+        await message.channel.send("$play [album name] - play one of your albums")
+        await message.channel.send("$title             - get info on song")
+        await message.channel.send("$vote              - get list of recommendations based on current song and pick one")
+        await message.channel.send("$stop              - stop music player")
         return
+
+    elif msg.startswith('$title'):
+        # TODO: return title song - have it just show the playlist name
+        song_info = sp.current_playback()
+        await message.channel.send(content='Playing ' + str(song_info['item']['name']) + '\nby ' + str(
+            song_info['item']['artists'][0]['name']))
+
+
+        # TODO: Save the active song to your playlist (or make one as well if you don't have one for the bot)
 
 @client.event
 async def on_reaction_add(reaction, user):
-    #print(str(reaction.message.id)+":VS:\n"+str(curSongId))
 
     if user.id != client.user.id and poll_id == reaction.message.id:  # TODO: test the second condition of this line - wasn't here before
         poll = discord.utils.get(client.cached_messages, id=reaction.message.id)
@@ -191,18 +200,6 @@ async def on_reaction_add(reaction, user):
                 elif reaction.emoji == '4️⃣':
                     print(next_songs[3]['uri'])
                     sp.start_playback(uris=[next_songs[3]['uri']])
-
-
-                """cur_song = await message.channel.send('Playing ' + str(next_songs['name']) + '\nby ' + str(
-                    next_songs['artists'][0]['name']))
-                curSongId = cur_song.id
-                await cur_song.add_reaction('🔉')
-                await cur_song.add_reaction('⏯')
-                await cur_song.add_reaction('⏩')
-                await cur_song.add_reaction('🔊')
-                print("cur_song.id: " + str(cur_song.id))"""
-
-
 
     elif user.id != client.user.id and curSongId == reaction.message.id:
         cur_song = discord.utils.get(client.cached_messages, id=reaction.message.id)
@@ -243,11 +240,9 @@ async def on_reaction_add(reaction, user):
                         else:
                             sp.volume(cur_vol + 10)
 
-                update_display(cur_song)
                 await cur_song.remove_reaction(rxn.emoji, user)
 
 
-#TODO: REMOVE THIS AND MY SPoTIFY KEY BEFORE PUSHING TO GITHUB
 client.run(os.getenv('BOT_ID'))
 
 # event planner: have people react to a message and notify / make a list of who repsonded and who didn't
@@ -262,8 +257,6 @@ client.run(os.getenv('BOT_ID'))
 #       guess songs - keeps track of how long it takes each player to guess
 
 # TODO:
-#  Spotipy discord bot - listen with others on discord server, play on discord server
-#  Can vote on next song to play within the group (generated based on what you like)
 #  Add songs to your own playlist (if you liked the song and want to write it down) (will have special playlist to add songs to from this bot)
 # That's VOTE mode, also GUESS (guess the song, keeping track of points), ARTIST (plays only that artist)
 # need play, pause, etc
