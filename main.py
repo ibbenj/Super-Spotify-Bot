@@ -15,7 +15,7 @@ async def on_ready():
     for guild in client.guilds:
         print("GUILD: "+str(guild.id)+" "+str(guild.name))
         if guild.name == "Ilan's Discord Bot Test server":
-            channel = guild.get_channel(1023706018078785556)
+            channel = guild.get_channel() #Enter name of channel here before you run - I removed the channel I use
     global vc
     vc = await channel.connect()
 
